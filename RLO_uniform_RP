@@ -2,24 +2,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <omp.h>  // OpenMP ¶óÀÌºê·¯¸®
+#include <omp.h>  // OpenMP ë¼ì´ë¸ŒëŸ¬ë¦¬
 #pragma warning(disable:4996)
 
-#define W 2000  // Å°¿öµåÀÇ ¼ö (wÀÇ ¹üÀ§)
-#define EPSILON 1e-14  // ·Î±× °è»ê ½Ã ³Ê¹« ÀÛÀº °ª ¹æÁö
+#define W 2000  // í‚¤ì›Œë“œì˜ ìˆ˜ (wì˜ ë²”ìœ„)
+#define EPSILON 1e-14  // ë¡œê·¸ ê³„ì‚° ì‹œ ë„ˆë¬´ ì‘ì€ ê°’ ë°©ì§€
 
-// Pr(rlen'=s|rlen=x) °è»ê ÇÔ¼ö
-// s >= x ÀÌ¸é 1/(s_max - x + 1), s < x ÀÌ¸é 0
+// Pr(rlen'=s|rlen=x) ê³„ì‚° í•¨ìˆ˜
+// s >= x ì´ë©´ 1/(s_max - x + 1), s < x ì´ë©´ 0
 double pr_rlen_s_given_rlen_x(int s, int x, int s_max) {
     if (s >= x) {
         return 1.0 / (s_max - x + 1);
     }
     else {
-        return 0.0;  // s < xÀÏ °æ¿ì 0
+        return 0.0;  // s < xì¼ ê²½ìš° 0
     }
 }
 
-// Pr(rlen=x) °è»ê ÇÔ¼ö
+// Pr(rlen=x) ê³„ì‚° í•¨ìˆ˜
 double pr_rlen_x(int* keyword_num_documents, int num_keywords, int x) {
     int count = 0;
     for (int i = 0; i < num_keywords; i++) {
@@ -30,18 +30,18 @@ double pr_rlen_x(int* keyword_num_documents, int num_keywords, int x) {
     return (count > 0) ? (double)count / (double)num_keywords : 0.0;
 }
 
-// Pr(key=w|rlen'=s) °è»ê ÇÔ¼ö
-// s < keyword_num_documentsÀÌ¸é 0, s >= keyword_num_documentsÀÌ¸é 1/(s_max - keyword_num_documents + 1)
+// Pr(key=w|rlen'=s) ê³„ì‚° í•¨ìˆ˜
+// s < keyword_num_documentsì´ë©´ 0, s >= keyword_num_documentsì´ë©´ 1/(s_max - keyword_num_documents + 1)
 double pr_key_w_given_rlen_s(int keyword_num_documents, int s, int s_max) {
     if (s < keyword_num_documents) {
-        return 0.0;  // s°¡ keyword_num_documentsº¸´Ù ÀÛÀ¸¸é 0
+        return 0.0;  // sê°€ keyword_num_documentsë³´ë‹¤ ì‘ìœ¼ë©´ 0
     }
     else {
-        return 1.0 / (s_max - keyword_num_documents + 1);  // s >= keyword_num_documentsÀÎ °æ¿ì
+        return 1.0 / (s_max - keyword_num_documents + 1);  // s >= keyword_num_documentsì¸ ê²½ìš°
     }
 }
 
-// H(s) °è»ê ÇÔ¼ö
+// H(s) ê³„ì‚° í•¨ìˆ˜
 double H_s(int* keyword_num_documents, int num_keywords, int s, int s_max) {
     double H = 0.0;
     for (int i = 0; i < num_keywords; i++) {
@@ -53,31 +53,31 @@ double H_s(int* keyword_num_documents, int num_keywords, int s, int s_max) {
     return H;
 }
 
-// RLO °è»ê ÇÔ¼ö (º´·ÄÈ­)
+// RLO ê³„ì‚° í•¨ìˆ˜ (ë³‘ë ¬í™”)
 double RLO_uniform_nopad(int* keyword_num_documents, int num_keywords, int s_min, int s_max) {
     double RLO = 0.0;
     int total_iterations = s_max - s_min + 1;
     int completed_iterations = 0;
 
-    // OpenMP¸¦ »ç¿ëÇÏ¿© s¿¡ ´ëÇÑ ¿ÜºÎ ·çÇÁ º´·ÄÈ­
+    // OpenMPë¥¼ ì‚¬ìš©í•˜ì—¬ sì— ëŒ€í•œ ì™¸ë¶€ ë£¨í”„ ë³‘ë ¬í™”
 #pragma omp parallel for reduction(+:RLO)
     for (int s = s_min; s <= s_max; s++) {
         double pr_rlen_prime_s = 0.0;
 
-        // x¿¡ ´ëÇÑ ·çÇÁ¸¦ º´·ÄÈ­
+        // xì— ëŒ€í•œ ë£¨í”„ë¥¼ ë³‘ë ¬í™”
         for (int x = s_min; x <= s_max; x++) {
             pr_rlen_prime_s += pr_rlen_x(keyword_num_documents, num_keywords, x) * pr_rlen_s_given_rlen_x(s, x, s_max);
         }
 
-        // H(s) °è»ê ¹× RLO¿¡ Ãß°¡
+        // H(s) ê³„ì‚° ë° RLOì— ì¶”ê°€
         double H_value = H_s(keyword_num_documents, num_keywords, s, s_max);
         RLO += pr_rlen_prime_s * H_value;
 
-        // ÁøÇà »óÈ² ¾÷µ¥ÀÌÆ®
+        // ì§„í–‰ ìƒí™© ì—…ë°ì´íŠ¸
 #pragma omp atomic
         completed_iterations++;
 
-        // ÁøÇà »óÈ²À» Ãâ·Â (1% ´ÜÀ§·Î)
+        // ì§„í–‰ ìƒí™©ì„ ì¶œë ¥ (1% ë‹¨ìœ„ë¡œ)
         if (completed_iterations % (total_iterations / 100) == 0) {
 #pragma omp critical
             {
@@ -89,7 +89,7 @@ double RLO_uniform_nopad(int* keyword_num_documents, int num_keywords, int s_min
     return RLO;
 }
 
-// CSV ÆÄÀÏ ÀĞ±â ÇÔ¼ö
+// CSV íŒŒì¼ ì½ê¸° í•¨ìˆ˜
 int read_csv(const char* filename, int* keyword_num_documents) {
     FILE* file = fopen(filename, "r");
     if (!file) {
@@ -100,19 +100,19 @@ int read_csv(const char* filename, int* keyword_num_documents) {
     char line[256];
     int i = 0;
 
-    // Ã¹ ¹øÂ° ÁÙ (Çì´õ) °Ç³Ê¶Ù±â
+    // ì²« ë²ˆì§¸ ì¤„ (í—¤ë”) ê±´ë„ˆë›°ê¸°
     fgets(line, sizeof(line), file);
 
-    // µ¥ÀÌÅÍ ÀĞ±â
+    // ë°ì´í„° ì½ê¸°
     while (fgets(line, sizeof(line), file)) {
         char* token = strtok(line, ",");
-        token = strtok(NULL, ",");  // keyword_num_documents °ª ÃßÃâ
+        token = strtok(NULL, ",");  // keyword_num_documents ê°’ ì¶”ì¶œ
 
         if (token != NULL) {
             keyword_num_documents[i++] = atoi(token);
         }
 
-        if (i >= W) {  // 500°³±îÁö¸¸ ÀĞÀ½
+        if (i >= W) {  // 500ê°œê¹Œì§€ë§Œ ì½ìŒ
             break;
         }
     }
@@ -122,26 +122,26 @@ int read_csv(const char* filename, int* keyword_num_documents) {
 }
 
 int main() {
-    // keyword_num_documents ¹è¿­ ¼±¾ğ
+    // keyword_num_documents ë°°ì—´ ì„ ì–¸
     int keyword_num_documents[W] = { 0 };
 
-    // CSV ÆÄÀÏ ÀĞ±â
+    // CSV íŒŒì¼ ì½ê¸°
     const char* filename = "C:/dataset/picked_pairs(2000).csv";
     if (read_csv(filename, keyword_num_documents) != 0) {
-        return 1;  // ÆÄÀÏÀ» ÀĞÁö ¸øÇÏ¸é Á¾·á
+        return 1;  // íŒŒì¼ì„ ì½ì§€ ëª»í•˜ë©´ ì¢…ë£Œ
     }
 
-    int num_keywords = W;  // Å°¿öµåÀÇ ÃÑ °³¼ö
-    int s_min = 100;         // ÃÖ¼Ò s °ª
-    int s_max = 107620;    // ÃÖ´ë s °ª
+    int num_keywords = W;  // í‚¤ì›Œë“œì˜ ì´ ê°œìˆ˜
+    int s_min = 100;         // ìµœì†Œ s ê°’
+    int s_max = 107620;    // ìµœëŒ€ s ê°’
 
-    // RLO °ª °è»ê
+    // RLO ê°’ ê³„ì‚°
     double rlo_value = RLO_uniform_nopad(keyword_num_documents, num_keywords, s_min, s_max);
 
-    // °á°ú Ãâ·Â
+    // ê²°ê³¼ ì¶œë ¥
     printf("RLO_uniform_nopad: %lf\n", rlo_value);
 
-    // °á°ú ÆÄÀÏ¿¡ ÀúÀå
+    // ê²°ê³¼ íŒŒì¼ì— ì €ì¥
     FILE* output_file = fopen("RLO_uniform_RP_2000'.txt", "w");
     if (output_file != NULL) {
         fprintf(output_file, "RLO_uniform_RP: %lf\n", rlo_value);
